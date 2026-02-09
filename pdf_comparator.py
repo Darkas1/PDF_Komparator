@@ -182,37 +182,7 @@ class PDFComparatorApp:
             cursor="hand2"
         )
         compare_button.pack(pady=20)
-        
-        # Legenda
-        legend_frame = tk.Frame(self.root, padx=20, pady=10)
-        legend_frame.pack()
-        
-        tk.Label(
-            legend_frame, 
-            text="Legenda: ", 
-            font=("Arial", 9, "bold")
-        ).grid(row=0, column=0, padx=5)
-        
-        tk.Label(
-            legend_frame, 
-            text="Pôvodné farby = rovnaký obsah", 
-            font=("Arial", 9)
-        ).grid(row=0, column=1, padx=5)
-        
-        tk.Label(
-            legend_frame, 
-            text="Červená = nový/zmenený obsah", 
-            font=("Arial", 9),
-            fg="red"
-        ).grid(row=0, column=2, padx=5)
-        
-        tk.Label(
-            legend_frame, 
-            text="Zelená = odstránený obsah", 
-            font=("Arial", 9),
-            fg="green"
-        ).grid(row=0, column=3, padx=5)
-    
+  
     def create_file_row(self, parent, label_text, var, row, is_save=False):
         """Vytvorí riadok s labelom, entry a tlačidlom pre výber súboru"""
         label = tk.Label(
@@ -396,7 +366,7 @@ class PDFComparatorApp:
         return result
     
     def images_to_pdf(self, images, output_path):
-        """Vytvorí PDF z obrázkov so zachovaním pôvodných rozmerov"""
+        """Vytvorí PDF z obrázkov so zachovaním pôvodných rozmerov a optimálnou kompresiou"""
         try:
             # Vytvoríme PDF pomocou PyMuPDF (fitz) pre lepšiu kontrolu
             pdf_document = fitz.open()
@@ -411,9 +381,10 @@ class PDFComparatorApp:
                 # Konverzia na PIL pre uloženie
                 pil_img = Image.fromarray(img_rgb)
                 
-                # Uloženie do dočasného súboru
-                temp_img = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
-                pil_img.save(temp_img.name, "PNG")
+                # Uloženie do dočasného súboru ako JPEG s optimálnou kompresiou (kvalita 85)
+                # JPEG redukuje veľkosť súboru až o 90% oproti PNG bez výraznej straty kvality
+                temp_img = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
+                pil_img.save(temp_img.name, "JPEG", quality=85, optimize=True)
                 temp_img.close()
                 
                 # Vytvoríme stránku s presne rovnakými rozmermi ako obrázok
@@ -438,8 +409,13 @@ class PDFComparatorApp:
                 except:
                     pass
             
-            # Uložíme PDF
-            pdf_document.save(output_path)
+            # Uložíme PDF s kompresiou a optimalizáciou
+            pdf_document.save(
+                output_path,
+                garbage=4,  # Maximálne čistenie nepoužívaných objektov
+                deflate=True,  # Kompresia streamov
+                clean=True  # Optimalizácia PDF štruktúry
+            )
             pdf_document.close()
                 
         except Exception as e:
