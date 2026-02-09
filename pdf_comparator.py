@@ -24,8 +24,8 @@ class PDFComparatorApp:
         self.output_pdf_path = tk.StringVar()
         
         # Nastavenia farieb (RGB tuple)
-        self.red_color = (255, 0, 0)  # Plná červená
-        self.green_color = (144, 238, 144)  # Bledá zelená (Light Green)
+        self.new_color = (255, 0, 0)  # Plná Farba - nové
+        self.old_color = (206, 183, 138)  # Bledá hnedá (Light Brown)
         
         self.create_widgets()
     
@@ -78,13 +78,13 @@ class PDFComparatorApp:
         )
         color_frame.pack(fill="x", padx=20, pady=10)
         
-        # Červená farba
+        # Farba - nové farba
         red_frame = tk.Frame(color_frame)
         red_frame.pack(fill="x", pady=5)
         
         tk.Label(
             red_frame,
-            text="Červená (nový obsah):",
+            text="Farba (nový obsah):",
             font=("Arial", 9),
             width=25,
             anchor="w"
@@ -95,7 +95,7 @@ class PDFComparatorApp:
             red_frame,
             width=40,
             height=25,
-            bg=self._rgb_to_hex(self.red_color),
+            bg=self._rgb_to_hex(self.new_color),
             highlightthickness=1,
             highlightbackground="gray"
         )
@@ -104,35 +104,35 @@ class PDFComparatorApp:
         tk.Button(
             red_frame,
             text="Vybrať farbu...",
-            command=self.choose_red_color,
+            command=self.choose_new_color,
             width=15
         ).pack(side="left", padx=5)
         
         tk.Label(
             red_frame,
-            text=f"RGB: {self.red_color}",
+            text=f"RGB: {self.new_color}",
             font=("Arial", 8),
             fg="gray"
         ).pack(side="left", padx=5)
         
-        # Zelená farba
+        # Farba - odstránené
         green_frame = tk.Frame(color_frame)
         green_frame.pack(fill="x", pady=5)
         
         tk.Label(
             green_frame,
-            text="Zelená (odstránený obsah):",
+            text="Farba (odstránený obsah):",
             font=("Arial", 9),
             width=25,
             anchor="w"
         ).pack(side="left")
         
-        # Farebný indikátor pre zelenú
+        # Farebný indikátor pre odstránené
         self.green_indicator = tk.Canvas(
             green_frame,
             width=40,
             height=25,
-            bg=self._rgb_to_hex(self.green_color),
+            bg=self._rgb_to_hex(self.old_color),
             highlightthickness=1,
             highlightbackground="gray"
         )
@@ -141,13 +141,13 @@ class PDFComparatorApp:
         tk.Button(
             green_frame,
             text="Vybrať farbu...",
-            command=self.choose_green_color,
+            command=self.choose_old_color,
             width=15
         ).pack(side="left", padx=5)
         
         tk.Label(
             green_frame,
-            text=f"RGB: {self.green_color}",
+            text=f"RGB: {self.old_color}",
             font=("Arial", 8),
             fg="gray"
         ).pack(side="left", padx=5)
@@ -236,25 +236,25 @@ class PDFComparatorApp:
         """Konvertuje RGB tuple na hexadecimálny formát pre Tkinter"""
         return f'#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}'
     
-    def choose_red_color(self):
+    def choose_new_color(self):
         """Otvorí color picker pre výber červenej farby"""
         color = colorchooser.askcolor(
-            color=self._rgb_to_hex(self.red_color),
+            color=self._rgb_to_hex(self.new_color),
             title="Vyberte farbu pre nový obsah"
         )
         if color[0]:  # color[0] je RGB tuple, color[1] je hex string
-            self.red_color = tuple(int(c) for c in color[0])
-            self.red_indicator.config(bg=self._rgb_to_hex(self.red_color))
+            self.new_color = tuple(int(c) for c in color[0])
+            self.red_indicator.config(bg=self._rgb_to_hex(self.new_color))
     
-    def choose_green_color(self):
+    def choose_old_color(self):
         """Otvorí color picker pre výber zelenej farby"""
         color = colorchooser.askcolor(
-            color=self._rgb_to_hex(self.green_color),
+            color=self._rgb_to_hex(self.old_color),
             title="Vyberte farbu pre odstránený obsah"
         )
         if color[0]:  # color[0] je RGB tuple, color[1] je hex string
-            self.green_color = tuple(int(c) for c in color[0])
-            self.green_indicator.config(bg=self._rgb_to_hex(self.green_color))
+            self.old_color = tuple(int(c) for c in color[0])
+            self.green_indicator.config(bg=self._rgb_to_hex(self.old_color))
     
     def extract_text_from_pdf(self, pdf_path):
         """Extrahuje text z PDF súboru - DEPRECATED, používame vizuálne porovnanie"""
@@ -283,18 +283,18 @@ class PDFComparatorApp:
         except Exception as e:
             raise Exception(f"Chyba pri čítaní PDF: {str(e)}")
     
-    def compare_images(self, old_img, new_img, red_color=(255, 0, 0), green_color=(144, 238, 144)):
+    def compare_images(self, old_img, new_img, new_color=(255, 0, 0), old_color=(206, 183, 138)):
         """
         Porovná dva obrázky a vytvorí výstupný obrázok:
         - Pôvodné farby = rovnaký obsah (ako v projekte)
-        - Červená = nový obsah (pridané čiary, text, objekty)
-        - Zelená = starý obsah (odstránený obsah)
+        - Farba - nové = nový obsah (pridané čiary, text, objekty)
+        - Hnedá = starý obsah (odstránený obsah)
         
         Args:
             old_img: Starý obrázok
             new_img: Nový obrázok
-            red_color: RGB farba pre nový obsah (tuple)
-            green_color: RGB farba pre odstránený obsah (tuple)
+            new_color: RGB farba pre nový obsah (tuple)
+            old_color: RGB farba pre odstránený obsah (tuple)
         """
         # Zabezpečiť rovnaké rozmery
         h1, w1 = old_img.shape[:2]
@@ -330,14 +330,14 @@ class PDFComparatorApp:
         old_has_content = old_gray < content_threshold
         new_has_content = new_gray < content_threshold
         
-        # 1. ZELENÁ - Odstránený obsah (bol v starom, nie je v novom)
+        # 1. HNEDÁ - Odstránený obsah (bol v starom, nie je v novom)
         # Kde bol obsah v starom PDF ale v novom je biela
         removed_content = old_has_content & (~new_has_content)
         
-        # Aplikujeme zelenú farbu s nastavenou RGB hodnotou (BGR formát pre OpenCV)
-        result[removed_content] = [green_color[2], green_color[1], green_color[0]]  # BGR - RGB -> BGR
+        # Aplikujeme hnedú farbu s nastavenou RGB hodnotou (BGR formát pre OpenCV)
+        result[removed_content] = [old_color[2], old_color[1], old_color[0]]  # BGR - RGB -> BGR
         
-        # 2. ČERVENÁ - Nový/zmenený obsah
+        # 2. Farba - nové - Nový/zmenený obsah
         # A) Obsah je v novom, ale nebol v starom
         new_content = new_has_content & (~old_has_content)
         
@@ -349,7 +349,7 @@ class PDFComparatorApp:
         red_mask = new_content | changed_content
         
         # Aplikujeme červenú farbu s nastavenou RGB hodnotou (BGR formát pre OpenCV)
-        result[red_mask] = [red_color[2], red_color[1], red_color[0]]  # BGR - RGB -> BGR
+        result[red_mask] = [new_color[2], new_color[1], new_color[0]]  # BGR - RGB -> BGR
         
         # Pre lepšiu viditeľnosť: zhrubnutie farebných označení (voliteľné)
         # Toto pomôže lepšie vidieť tenké čiary
@@ -360,8 +360,8 @@ class PDFComparatorApp:
         removed_mask_dilated = cv2.dilate(removed_content.astype(np.uint8), kernel, iterations=1)
         
         # Aplikujeme rozšírené masky s nastaviteľnými farbami (BGR formát)
-        result[red_mask_dilated > 0] = [red_color[2], red_color[1], red_color[0]]
-        result[removed_mask_dilated > 0] = [green_color[2], green_color[1], green_color[0]]
+        result[red_mask_dilated > 0] = [new_color[2], new_color[1], new_color[0]]
+        result[removed_mask_dilated > 0] = [old_color[2], old_color[1], old_color[0]]
         
         return result
     
@@ -480,8 +480,8 @@ class PDFComparatorApp:
                 result_img = self.compare_images(
                     old_img, 
                     new_img,
-                    red_color=self.red_color,
-                    green_color=self.green_color
+                    new_color=self.new_color,
+                    old_color=self.old_color
                 )
                 result_images.append(result_img)
             
