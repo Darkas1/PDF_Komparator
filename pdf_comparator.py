@@ -9,13 +9,19 @@ from reportlab.lib.units import inch
 import fitz  # PyMuPDF
 import os
 import tempfile
+try:
+    import pikepdf
+    PIKEPDF_AVAILABLE = True
+except ImportError:
+    PIKEPDF_AVAILABLE = False
+    print("VAROVANIE: pikepdf nie je nainštalovaný. Filtrovanie vrstiev nebude fungovať.")
 
 
 class PDFComparatorApp:
     def __init__(self, root):
         self.root = root
         self.root.title("PDF Porovnávatko")
-        self.root.geometry("700x550")
+        self.root.geometry("700x600")
         self.root.resizable(False, False)
         
         # Cesty k súborom
@@ -26,6 +32,17 @@ class PDFComparatorApp:
         # Nastavenia farieb (RGB tuple)
         self.new_color = (255, 0, 0)  # Plná Farba - nové
         self.old_color = (206, 183, 138)  # Bledá hnedá (Light Brown)
+        
+        # Nastavenie automatického otvorenia PDF
+        self.auto_open_pdf = tk.BooleanVar(value=True)
+        
+        # Správa vrstiev PDF
+        self.layer_settings = {}  # Dictionary pre uloženie checkboxov vrstiev
+        self.enabled_layers = set()  # Množina povolených vrstiev
+        
+        # Sledovanie posledných PDF súborov pre reset vrstiev
+        self.last_old_pdf = ""
+        self.last_new_pdf = ""
         
         self.create_widgets()
     
@@ -169,19 +186,37 @@ class PDFComparatorApp:
             length=300
         )
         
-        # Tlačidlo porovnania
-        compare_button = tk.Button(
-            self.root,
-            text="Porovnať PDF",
-            command=self.compare_pdfs,
-            bg="#4CAF50",
+        # Frame pre tlačidlá
+        buttons_frame = tk.Frame(self.root)
+        buttons_frame.pack(pady=10)
+        
+        # Tlačidlo pre správu vrstiev
+        layers_button = tk.Button(
+            buttons_frame,
+            text="Nastavenie vrstiev PDF",
+            command=self.open_layer_settings,
+            bg="#2196F3",
             fg="white",
-            font=("Arial", 12, "bold"),
+            font=("Arial", 10, "bold"),
             padx=20,
             pady=10,
             cursor="hand2"
         )
-        compare_button.pack(pady=20)
+        layers_button.pack(side="left", padx=5)
+        
+        # Tlačidlo porovnania
+        compare_button = tk.Button(
+            buttons_frame,
+            text="Porovnať PDF",
+            command=self.compare_pdfs,
+            bg="#4CAF50",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            padx=20,
+            pady=10,
+            cursor="hand2"
+        )
+        compare_button.pack(side="left", padx=5)
   
     def create_file_row(self, parent, label_text, var, row, is_save=False):
         """Vytvorí riadok s labelom, entry a tlačidlom pre výber súboru"""
@@ -236,6 +271,178 @@ class PDFComparatorApp:
         """Konvertuje RGB tuple na hexadecimálny formát pre Tkinter"""
         return f'#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}'
     
+    def check_pdf_change_and_reset_layers(self):
+        """Skontroluje, či sa zmenili PDF súbory a resetuje výber vrstiev"""
+        current_old = self.old_pdf_path.get()
+        current_new = self.new_pdf_path.get()
+        
+        if current_old != self.last_old_pdf or current_new != self.last_new_pdf:
+            # PDF sa zmenilo, resetujeme výber vrstiev
+            self.enabled_layers.clear()
+            self.layer_settings.clear()
+            self.last_old_pdf = current_old
+            self.last_new_pdf = current_new
+    
+    def get_pdf_layers(self, pdf_path):
+        """Získa zoznam vrstiev z PDF súboru"""
+        try:
+            doc = fitz.open(pdf_path)
+            layers = []
+            
+            # PyMuPDF používa layer_ui_configs() pre získanie vrstiev
+            try:
+                layer_list = doc.layer_ui_configs()
+                if layer_list:
+                    for layer in layer_list:
+                        # Každá vrstva je dictionary s 'text' (meno vrstvy) a 'number' (ID)
+                        layer_name = layer.get('text', f"Vrstva {layer.get('number', '?')}")
+                        layers.append(layer_name)
+            except:
+                # Starší spôsob alebo alternatíva
+                pass
+            
+            doc.close()
+            return layers
+        except Exception as e:
+            return []
+    
+    def open_layer_settings(self):
+        """Otvorí okno pre nastavenie vrstiev PDF"""
+        # Validácia - musíme mať vybraté aspoň jeden PDF
+        if not self.old_pdf_path.get() and not self.new_pdf_path.get():
+            messagebox.showwarning("Upozornenie", "Vyberte aspoň jeden PDF súbor pre nastavenie vrstiev!")
+            return
+        
+        # Skontrolujeme, či sa zmenili PDF súbory
+        self.check_pdf_change_and_reset_layers()
+        
+        # Získame vrstvy z oboch PDF
+        old_layers = self.get_pdf_layers(self.old_pdf_path.get()) if self.old_pdf_path.get() else []
+        new_layers = self.get_pdf_layers(self.new_pdf_path.get()) if self.new_pdf_path.get() else []
+        
+        # Spojíme vrstvy z oboch PDF (odstránime duplikáty)
+        all_layers = sorted(set(old_layers + new_layers))
+        
+        if not all_layers:
+            messagebox.showinfo("Info", "Vybrané PDF súbory neobsahujú žiadne vrstvy.")
+            return
+        
+        # Ak je enabled_layers prázdny (prvé otvorenie alebo po resete), nastavime všetky vrstvy
+        if not self.enabled_layers:
+            self.enabled_layers = set(all_layers)
+        
+        # Vytvoríme nové okno
+        layer_window = tk.Toplevel(self.root)
+        layer_window.title("Nastavenie vrstiev PDF")
+        layer_window.geometry("500x450")
+        layer_window.resizable(False, False)
+        
+        # Nadpis
+        title_label = tk.Label(
+            layer_window,
+            text="Vyberte vrstvy na porovnanie",
+            font=("Arial", 14, "bold"),
+            pady=15
+        )
+        title_label.pack()
+        
+        # Info text
+        info_text = f"Starý PDF: {len(old_layers)} vrstiev\nNový PDF: {len(new_layers)} vrstiev\nCelkovo: {len(all_layers)} unikátnych vrstiev"
+        info_label = tk.Label(
+            layer_window,
+            text=info_text,
+            font=("Arial", 9),
+            fg="gray",
+            justify="left"
+        )
+        info_label.pack()
+        
+        # Master checkbox pre všetky vrstvy
+        master_var = tk.BooleanVar(value=True)
+        
+        def update_enabled_layers_global():
+            """Aktualizuje enabled_layers podľa aktuálneho stavu checkboxov"""
+            self.enabled_layers.clear()
+            for layer_name, var in self.layer_settings.items():
+                if var.get():
+                    self.enabled_layers.add(layer_name)
+        
+        def toggle_all_layers():
+            """Prepne všetky vrstvy naraz a automaticky uloží"""
+            state = master_var.get()
+            for layer_var in self.layer_settings.values():
+                layer_var.set(state)
+            # Automaticky uložíme
+            update_enabled_layers_global()
+        
+        master_frame = tk.Frame(layer_window, pady=10)
+        master_frame.pack(fill="x", padx=20)
+        
+        master_checkbox = tk.Checkbutton(
+            master_frame,
+            text="Vybrať / Zrušiť všetky vrstvy",
+            variable=master_var,
+            command=toggle_all_layers,
+            font=("Arial", 10, "bold")
+        )
+        master_checkbox.pack(anchor="w")
+        
+        tk.Frame(layer_window, height=2, bg="gray").pack(fill="x", padx=20, pady=5)
+        
+        # Scrollable frame pre vrstvy
+        canvas = tk.Canvas(layer_window, height=200)
+        scrollbar = ttk.Scrollbar(layer_window, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side="left", fill="both", expand=True, padx=(20, 0))
+        scrollbar.pack(side="right", fill="y", padx=(0, 20))
+        
+        # Vytvoríme checkboxy pre každú vrstvu
+        self.layer_settings.clear()
+        
+        def update_enabled_layers():
+            """Aktualizuje enabled_layers podľa aktuálneho stavu checkboxov"""
+            update_enabled_layers_global()
+        
+        for layer_name in all_layers:
+            # Načítame uložený stav (ak existuje v enabled_layers)
+            is_enabled = layer_name in self.enabled_layers
+            var = tk.BooleanVar(value=is_enabled)
+            self.layer_settings[layer_name] = var
+            
+            # Info o tom, v ktorých PDF je vrstva
+            in_old = layer_name in old_layers
+            in_new = layer_name in new_layers
+            
+            if in_old and in_new:
+                suffix = " (oba PDF)"
+            elif in_old:
+                suffix = " (len starý PDF)"
+            else:
+                suffix = " (len nový PDF)"
+            
+            # Automatické ukladanie pri zmene checkboxu
+            def create_callback(layer_var=var):
+                return lambda: update_enabled_layers()
+            
+            checkbox = tk.Checkbutton(
+                scrollable_frame,
+                text=layer_name + suffix,
+                variable=var,
+                font=("Arial", 9),
+                anchor="w",
+                command=create_callback()
+            )
+            checkbox.pack(fill="x", pady=2, padx=10)
+        
     def choose_new_color(self):
         """Otvorí color picker pre výber červenej farby"""
         color = colorchooser.askcolor(
@@ -260,16 +467,80 @@ class PDFComparatorApp:
         """Extrahuje text z PDF súboru - DEPRECATED, používame vizuálne porovnanie"""
         pass
     
-    def pdf_to_images(self, pdf_path, dpi=150):
-        """Konvertuje všetky stránky PDF na obrázky"""
+    def pdf_to_images(self, pdf_path, dpi=150, filter_layers=False):
+        """Konvertuje všetky stránky PDF na obrázky
+        
+        Args:
+            pdf_path: Cesta k PDF súboru
+            dpi: Rozlíšenie renderovania
+            filter_layers: Ak True, renderuje len vybrané vrstvy. Ak False, renderuje všetky vrstvy.
+        """
         try:
-            doc = fitz.open(pdf_path)
+            # Ak potrebujeme filtrovať vrstvy a máme pikepdf
+            if filter_layers and self.enabled_layers and PIKEPDF_AVAILABLE:
+                # Vytvoríme dočasný PDF s vypnutými vrstvami
+                temp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+                temp_pdf.close()
+                
+                try:
+                    # Použijeme pikepdf na úpravu vrstiev
+                    with pikepdf.open(pdf_path) as pdf:
+                        # Získame OCG (Optional Content Groups)
+                        if '/OCProperties' in pdf.Root:
+                            ocprops = pdf.Root.OCProperties
+                            
+                            if '/OCGs' in ocprops:
+                                ocgs = ocprops.OCGs
+                                
+                                # Nastavenie base state na OFF pre všetky vrstvy
+                                if '/D' not in ocprops:
+                                    ocprops.D = pikepdf.Dictionary()
+                                
+                                d_dict = ocprops.D
+                                
+                                # Nastavime BaseState na OFF (všetky vrstvy vypnuté)
+                                d_dict.BaseState = pikepdf.Name('/OFF')
+                                
+                                # Vytvoríme zoznam vrstiev na zapnutie (ON array)
+                                on_layers = pikepdf.Array()
+                                
+                                for ocg in ocgs:
+                                    try:
+                                        if '/Name' in ocg:
+                                            layer_name = str(ocg.Name)
+                                            # Odstránime '/' z začiatku ak existuje
+                                            if layer_name.startswith('/'):
+                                                layer_name = layer_name[1:]                                            
+                                            # Ak je vrstva v povolených, pridáme ju do ON
+                                            if layer_name in self.enabled_layers:
+                                                on_layers.append(ocg)
+                                    except Exception as e:
+                                        pass  # Pokračujeme pri chybe
+                                
+                                # Nastavime ON pole
+                                d_dict.ON = on_layers
+                                
+                        # Uložíme modifikovaný PDF
+                        pdf.save(temp_pdf.name)
+                    
+                    # Teraz renderujeme modifikovaný PDF
+                    doc = fitz.open(temp_pdf.name)
+                    
+                except Exception as e:
+                    # Ak zlyhalo, použijeme pôvodný PDF
+                    doc = fitz.open(pdf_path)
+                    temp_pdf.name = None
+            else:
+                # Štandardné otvorenie bez filtrovania
+                doc = fitz.open(pdf_path)
+                temp_pdf = None
+            
             images = []
             
             for page_num in range(len(doc)):
                 page = doc[page_num]
                 # Renderovanie stránky do obrázka
-                mat = fitz.Matrix(dpi/72, dpi/72)  # Transformačná matrica pre DPI
+                mat = fitz.Matrix(dpi/72, dpi/72)
                 pix = page.get_pixmap(matrix=mat, alpha=False)
                 
                 # Konverzia na NumPy array
@@ -279,6 +550,14 @@ class PDFComparatorApp:
                 images.append(img)
             
             doc.close()
+            
+            # Odstránime dočasný PDF
+            if temp_pdf and temp_pdf.name:
+                try:
+                    os.remove(temp_pdf.name)
+                except:
+                    pass
+            
             return images
         except Exception as e:
             raise Exception(f"Chyba pri čítaní PDF: {str(e)}")
@@ -444,13 +723,17 @@ class PDFComparatorApp:
             self.root.update()
             
             # Konverzia PDF na obrázky
+            # Ak sú nastavené filtre vrstiev, renderujeme len vybrané vrstvy
+            # Inak renderujeme všetky vrstvy
+            use_layer_filter = bool(self.enabled_layers)
+            
             self.progress_label.config(text="Renderujem starý PDF...")
             self.root.update()
-            old_images = self.pdf_to_images(self.old_pdf_path.get())
+            old_images = self.pdf_to_images(self.old_pdf_path.get(), filter_layers=use_layer_filter)
             
             self.progress_label.config(text="Renderujem nový PDF...")
             self.root.update()
-            new_images = self.pdf_to_images(self.new_pdf_path.get())
+            new_images = self.pdf_to_images(self.new_pdf_path.get(), filter_layers=use_layer_filter)
             
             # Určenie počtu stránok
             max_pages = max(len(old_images), len(new_images))
@@ -495,17 +778,20 @@ class PDFComparatorApp:
             self.progress_bar.pack_forget()
             self.progress_label.config(text="")
             
-            # Opýtame sa či chce otvoriť výsledný PDF
-            response = messagebox.askyesno(
+            # Zobrazíme správu o úspešnom dokončení
+            layer_info = ""
+            if self.enabled_layers:
+                layer_info = f"\nPorovnané vrstvy: {len(self.enabled_layers)}"
+            
+            messagebox.showinfo(
                 "Porovnanie dokončené", 
                 f"PDF súbory boli úspešne porovnané!\n\n"
                 f"Výstupný súbor: {self.output_pdf_path.get()}\n\n"
-                f"Porovnaných stránok: {max_pages}\n\n"
-                f"Chcete otvoriť výsledný PDF?"
+                f"Porovnaných stránok: {max_pages}{layer_info}"
             )
             
-            # Ak používateľ chce otvoriť PDF
-            if response:
+            # Ak je zaškrtnuté automatické otvorenie, otvoríme PDF
+            if self.auto_open_pdf.get():
                 try:
                     os.startfile(self.output_pdf_path.get())
                 except Exception as e:
