@@ -24,6 +24,34 @@ Nevyžaduje inštaláciu Pythonu ani závislostí!
 python pdf_comparator.py
 ```
 
+## Inštalácia závislostí
+
+Pred spustením Python skriptu je potrebné nainštalovať potrebné knižnice.
+
+### 1. Vytvorenie virtuálneho prostredia (voliteľné, ale odporúčané)
+
+```powershell
+python -m venv .venv
+```
+
+### 2. Aktivácia virtuálneho prostredia
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+### 3. Inštalácia knižníc z requirements.txt
+
+```powershell
+pip install -r requirements.txt
+```
+
+Alebo môžete nainštalovať knižnice manuálne:
+
+```powershell
+pip install PyMuPDF opencv-python numpy Pillow reportlab
+```
+
 ## Vytvorenie EXE súboru po úprave kódu
 
 Ak ste vykonali zmeny v `pdf_comparator.py` a chcete vytvoriť nový EXE súbor, postupujte takto:
