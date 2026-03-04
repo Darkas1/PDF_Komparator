@@ -43,7 +43,7 @@ pip install pyinstaller
 ### 3. Vytvorenie EXE súboru
 
 ```powershell
-pyinstaller --onefile --windowed --name "PDF_Komparator" pdf_comparator.py
+.venv\Scripts\python.exe -m PyInstaller --onefile --windowed --name "PDF_Komparator" pdf_comparator.py
 ```
 
 **Vysvetlenie parametrov:**
